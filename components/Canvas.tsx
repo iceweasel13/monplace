@@ -1,76 +1,117 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // components/Canvas.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner"; // DEĞİŞİKLİK: sonner'dan toast importu
+import { db } from "@/lib/firebase-client";
+import { collection, onSnapshot } from "firebase/firestore";
 
-// Canvas'ın propları için type tanımı
 type CanvasProps = {
   selectedColor: string;
 };
 
-// Grid'in boyutlarını belirliyoruz
 const GRID_SIZE = 100;
+const COOLDOWN_SECONDS = 60;
 
-// Her bir pikselin type'ı (şimdilik sadece renk bilgisi)
 type Pixel = {
   color: string;
 };
 
 export default function Canvas({ selectedColor }: CanvasProps) {
-  // 100x100'lük grid'in state'ini tutuyoruz.
-  // Varsayılan olarak tüm pikselleri gri yapalım.
+  const { status } = useSession();
+  // DEĞİŞİKLİK: useToast hook'unu kaldırdık
+  const [lastPaintTimestamp, setLastPaintTimestamp] = useState(0);
+
   const [grid, setGrid] = useState<Pixel[][]>(() =>
     Array(GRID_SIZE)
       .fill(null)
-      .map(() => Array(GRID_SIZE).fill({ color: "#D3D3D3" }))
+      .map(() => Array(GRID_SIZE).fill({ color: "#FFFFFF" }))
   );
 
-  const handlePixelClick = (row: number, col: number) => {
-    // Tıklanan pikselin rengini, seçili renk ile değiştir.
-    const newGrid = grid.map((r, rowIndex) =>
-      r.map((pixel, colIndex) => {
-        if (rowIndex === row && colIndex === col) {
-          return { ...pixel, color: selectedColor };
-        }
-        return pixel;
-      })
-    );
-    setGrid(newGrid);
-    console.log(`Pixel (${row}, ${col}) boyandı: ${selectedColor}`);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "pixels"), (snapshot) => {
+      setGrid((prevGrid) => {
+        const newGrid = prevGrid.map(row => [...row]);
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added" || change.type === "modified") {
+            const { x, y, color } = change.doc.data();
+            if (x < GRID_SIZE && y < GRID_SIZE) {
+              newGrid[y][x] = { color };
+            }
+          }
+        });
+        return newGrid;
+      });
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handlePixelClick = async (row: number, col: number) => {
+    if (status !== "authenticated") {
+      // DEĞİŞİKLİK: Yeni toast kullanımı
+      toast.error("Please connect your wallet to paint a pixel.");
+      return;
+    }
+
+    const now = Date.now();
+    const timeSinceLastPaint = (now - lastPaintTimestamp) / 1000;
+    if (timeSinceLastPaint < COOLDOWN_SECONDS) {
+      const remainingSeconds = Math.ceil(COOLDOWN_SECONDS - timeSinceLastPaint);
+      // DEĞİŞİKLİK: Yeni toast kullanımı
+      toast.warning(`Please wait ${remainingSeconds} more seconds before painting again.`);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/paint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x: col, y: row, color: selectedColor }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to paint pixel.");
+      }
+
+      setLastPaintTimestamp(Date.now());
+      // DEĞİŞİKLİK: Yeni toast kullanımı (başarı mesajı)
+      toast.success(`Pixel at (${col}, ${row}) has been painted.`);
+    } catch (error: any) {
+      console.error(error);
+      // DEĞİŞİKLİK: Yeni toast kullanımı (hata mesajı)
+      toast.error(error.message);
+    }
   };
 
   return (
-    <div className="w-full h-full cursor-grab">
+    <div className="w-full h-full cursor-grab active:cursor-grabbing">
       <TransformWrapper
         limitToBounds={false}
-        minScale={0.2}
-        maxScale={15}
+        minScale={0.5}
+        maxScale={30}
         initialScale={1}
-        initialPositionX={0}
-        initialPositionY={0}
       >
-        <TransformComponent
-          wrapperStyle={{ width: "100%", height: "100%" }}
-          contentStyle={{
-            width: `${GRID_SIZE * 16}px`, // Piksellerin toplam genişliği
-            height: `${GRID_SIZE * 16}px`, // Piksellerin toplam yüksekliği
-          }}
-        >
+        <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
           <div
             className="grid"
             style={{
               gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
-              width: `${GRID_SIZE * 16}px`,
-              height: `${GRID_SIZE * 16}px`,
-              border: "1px solid #444",
+              width: `${GRID_SIZE * 20}px`,
+              height: `${GRID_SIZE * 20}px`,
+              border: "2px solid #4a5568",
+              backgroundColor: "#E2E8F0",
             }}
           >
             {grid.map((rowItems, rowIndex) =>
               rowItems.map((pixel, colIndex) => (
                 <div
                   key={`${rowIndex}-${colIndex}`}
-                  className="w-4 h-4 border-r border-b border-gray-400 hover:opacity-80"
+                  className="w-5 h-5 border-r border-b border-gray-300 hover:border-blue-500 hover:border-2"
                   style={{ backgroundColor: pixel.color }}
                   onClick={() => handlePixelClick(rowIndex, colIndex)}
                 />
