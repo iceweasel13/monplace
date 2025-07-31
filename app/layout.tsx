@@ -6,6 +6,7 @@ import { type ReactNode } from "react";
 import Providers from "../components/Provider";
 import { getServerSession, Session } from "next-auth";
 import { authConfig } from "../auth";
+import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -22,6 +23,7 @@ export default async function RootLayout(props: { children: ReactNode }) {
       <body className={inter.className}>
         <Providers session={session} cookie={cookie}>
           {props.children}
+           <Toaster />
         </Providers>
       </body>
     </html>
