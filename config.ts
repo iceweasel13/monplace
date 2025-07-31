@@ -13,6 +13,7 @@ export const config = getDefaultConfig({
     storage: cookieStorage,
   }),
   transports: {
+    [monadTestnet.id]: http(), // Add transport for monadTestnet
     [polygon.id]: http(),
   },
 });

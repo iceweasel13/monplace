@@ -29,11 +29,13 @@ type Pixel = {
 
 export default function Canvas({ selectedColor }: CanvasProps) {
   const { status } = useSession();
-  const { data: hash, writeContract, isPending, error } = useWriteContract();
-  
+  const { data: hash, writeContract, isPending, error: writeError } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed, error: confirmError } = useWaitForTransactionReceipt({ hash });
+
   const [grid, setGrid] = useState<Pixel[][]>(() =>
     Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill({ color: "#FFFFFF" }))
   );
+  const [toastId, setToastId] = useState<string | number | undefined>(undefined);
 
   // Firestore'u anlık olarak dinlemeye devam ediyoruz
   useEffect(() => {
@@ -55,19 +57,28 @@ export default function Canvas({ selectedColor }: CanvasProps) {
   }, []);
 
   // Transaction'ın sonucunu izleyip toast göstermek için
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
-
   useEffect(() => {
-    if (isConfirming) {
-      toast.loading("Transaction is being confirmed...");
+    // When transaction is initiated (isPending from useWriteContract)
+    if (isPending && !toastId) {
+      const id = toast.loading("Sending transaction...");
+      setToastId(id);
+    } 
+    // When transaction is sent and waiting for confirmation (hash is available and isConfirming)
+    else if (!isPending && hash && isConfirming && toastId) {
+      toast.loading("Transaction is being confirmed...", { id: toastId });
     }
-    if (isConfirmed) {
-      toast.success("Pixel painted successfully!");
+    // When transaction is confirmed
+    else if (isConfirmed && toastId) {
+      toast.success("Pixel painted successfully!", { id: toastId });
+      setToastId(undefined);
     }
-    if (error) {
-      toast.error(error.shortMessage || "An error occurred.");
+    // When an error occurs (either from writeContract or useWaitForTransactionReceipt)
+    else if ((writeError || confirmError) && toastId) {
+      const error = writeError || confirmError;
+      toast.error(error?.message || "An error occurred.", { id: toastId });
+      setToastId(undefined);
     }
-  }, [isConfirming, isConfirmed, error]);
+  }, [isPending, hash, isConfirming, isConfirmed, writeError, confirmError, toastId]);
 
 
   const handlePixelClick = async (row: number, col: number) => {
