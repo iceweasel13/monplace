@@ -14,6 +14,7 @@
     "@types/react-color": "^3.0.13",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.1",
     "firebase": "^12.0.0",
     "firebase-admin": "^13.4.0",
     "iron-session": "github:renchris/iron-session#v8-as-dependency",
@@ -40,6 +41,8 @@
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.3",
     "tw-animate-css": "^1.3.6",
     "typescript": "^5"
   }
