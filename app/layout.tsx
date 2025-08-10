@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout(props: { children: ReactNode }) {
    const session = (await getServerSession(authConfig)) as Session;
-   const cookie = headers().get("cookie") as string;
+   const cookie = (await headers()).get("cookie") as string;
   return (
     <html lang="en">
       <body className={` ${pressStart2P.className}`}>

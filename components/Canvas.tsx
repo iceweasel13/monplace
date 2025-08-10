@@ -14,7 +14,6 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther } from "viem";
 import { contractAddress, contractAbi } from "@/lib/contract";
-import Image from "next/image";
 
 const paletteColors = [
   "#3E3472", // Dark Monad
