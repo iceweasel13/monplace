@@ -10,10 +10,11 @@ type ColorPaletteProps = {
 
 // Palet renklerimiz
 const paletteColors = [
-    "#3E3472", // Dark Monad
+  "#3E3472", // Dark Monad
   "#6950F0", // Monad Purple
   "#A3D8F4", // Pastel Blue
   "#F6A5C0", // Pastel Pink
+  "#FF3F33", // Pastel Red
   "#F9D57E", // Pastel Yellow
   "#AED9B6", // Pastel Green
   "#FBFAF9", // Monad White
