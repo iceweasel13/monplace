@@ -14,6 +14,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther } from "viem";
 import { contractAddress, contractAbi } from "@/lib/contract";
+import Image from "next/image";
 
 const paletteColors = [
   "#3E3472", // Dark Monad
@@ -45,11 +46,7 @@ export default function Canvas({ selectedColor }: CanvasProps) {
   const [toastId, setToastId] = useState<string | number | undefined>(undefined);
   const [mouseDownPos, setMouseDownPos] = useState<{ x: number; y: number } | null>(null);
   const [optimisticUpdate, setOptimisticUpdate] = useState<OptimisticUpdate>(null);
-  
-  // DEĞİŞİKLİK: Hangi pikselin boyanacağını geçici olarak tutacak state
-  const [pendingPixel, setPendingPixel] = useState<{ row: number; col: number } | null>(null);
 
-  // Firestore listener
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "pixels"), (snapshot) => {
       setGrid((prevGrid) => {
@@ -70,28 +67,32 @@ export default function Canvas({ selectedColor }: CanvasProps) {
     return () => unsubscribe();
   }, []);
 
-  // DEĞİSİKLİK: İşlem gönderildiğinde (hash oluştuğunda) iyimser güncellemeyi yap
   useEffect(() => {
-    if (hash && pendingPixel) {
-      // Orijinal rengi sakla
-      const originalColor = grid![pendingPixel.row][pendingPixel.col].color;
-      setOptimisticUpdate({ ...pendingPixel, originalColor });
+    const error = writeError || confirmError;
+    
+    // İşlem cüzdanda reddedildiğinde veya bir hata olduğunda rengi geri al
+    if (error && optimisticUpdate) {
+        if (toastId) {
+            toast.error( "Transaction failed.", { id: toastId });
+        } else {
+            // Eğer toast henüz oluşmadıysa (cüzdan direkt reddettiyse) yeni bir tane oluştur
+            toast.error("Transaction failed.");
+        }
       
-      // Grid'i anlık olarak güncelle
-      setGrid((prev) => {
-        if (!prev) return prev;
-        const newGrid = prev.map((r) => [...r]);
-        newGrid[pendingPixel.row][pendingPixel.col] = { color: selectedColor };
-        return newGrid;
-      });
-      
-      // Bekleyen pikseli temizle
-      setPendingPixel(null);
-    }
-  }, [hash, pendingPixel]);
+        setGrid((prevGrid) => {
+            if (!prevGrid) return null;
+            const newGrid = prevGrid.map((row) => [...row]);
+            newGrid[optimisticUpdate.row][optimisticUpdate.col] = { color: optimisticUpdate.originalColor };
+            return newGrid;
+        });
 
-  // Toast bildirimlerini yönetme
-  useEffect(() => {
+        setToastId(undefined);
+        setOptimisticUpdate(null);
+        reset();
+        return;
+    }
+    
+    // Başarılı işlem akışı
     if (isPending && !toastId) {
       const id = toast.loading("Waiting for approval in your wallet...");
       setToastId(id);
@@ -111,25 +112,8 @@ export default function Canvas({ selectedColor }: CanvasProps) {
       setOptimisticUpdate(null);
       reset();
     }
-
-    const error = writeError || confirmError;
-    if (error) {
-      toast.error(  "Transaction failed.", { id: toastId });
-      if (optimisticUpdate) {
-        setGrid((prevGrid) => {
-          if (!prevGrid) return null;
-          const newGrid = prevGrid.map((row) => [...row]);
-          newGrid[optimisticUpdate.row][optimisticUpdate.col] = { color: optimisticUpdate.originalColor };
-          return newGrid;
-        });
-      }
-      setToastId(undefined);
-      setOptimisticUpdate(null);
-      reset();
-    }
   }, [isPending, hash, isConfirming, isConfirmed, writeError, confirmError, toastId, optimisticUpdate, reset]);
   
-  // DEĞİŞİKLİK: handlePixelClick artık sadece işlemi başlatıyor
   const handlePixelClick = (row: number, col: number) => {
     if (status !== "authenticated") {
       toast.error("Please connect your wallet to paint a pixel.");
@@ -144,11 +128,17 @@ export default function Canvas({ selectedColor }: CanvasProps) {
       toast.error("Invalid color selected.");
       return;
     }
+    
+    // 1. İYİMSER GÜNCELLEME: Tıklandığı anda rengi değiştir
+    const originalColor = grid![row][col].color;
+    setOptimisticUpdate({ row, col, originalColor });
+    setGrid((prev) => {
+      if (!prev) return prev;
+      const newGrid = prev.map((r) => [...r]);
+      newGrid[row][col] = { color: selectedColor };
+      return newGrid;
+    });
 
-    // İyimser güncelleme yapmadan önce hangi pikselin beklendiğini kaydet
-    setPendingPixel({ row, col });
-
-    // İşlemi gönder
     writeContract({
       address: contractAddress,
       abi: contractAbi,
@@ -183,9 +173,15 @@ export default function Canvas({ selectedColor }: CanvasProps) {
         limitToBounds={false}
         minScale={0.5}
         maxScale={30}
+        initialScale={1}
+        // 2. GÜNCELLENMİŞ BAŞLANGIÇ POZİSYONU
         onInit={(ref: ReactZoomPanPinchRef) => {
           setTimeout(() => {
-            ref.centerView(0.75, 100);
+            const scale = 0.75; // Başlangıç zoom out seviyesi
+            const canvasWidth = GRID_SIZE * PIXEL_SIZE * scale;
+            const positionX = (window.innerWidth - canvasWidth) / 2;
+            const positionY = 100; // Navbar'dan 100px boşluk
+            ref.setTransform(positionX, positionY, scale, 100);
           }, 100);
         }}
       >
@@ -204,7 +200,7 @@ export default function Canvas({ selectedColor }: CanvasProps) {
               rowItems.map((pixel, colIndex) => (
                 <div
                   key={`${rowIndex}-${colIndex}`}
-                  className="w-5 h-5 border-r border-b border-gray-300 hover:border-monad hover:border-2"
+                  className="w-5 h-5 border-r border-b border-purple-200 hover:border-monad hover:border-2"
                   style={{ backgroundColor: pixel.color }}
                   onMouseDown={handleMouseDown}
                   onMouseUp={(e) => handleMouseUp(e, rowIndex, colIndex)}

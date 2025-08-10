@@ -3,6 +3,7 @@
 import "@rainbow-me/rainbowkit/styles.css";
 import { cookieToInitialState, WagmiProvider } from "wagmi";
 import {
+  lightTheme,
   RainbowKitProvider as NextRainbowKitProvider,
   RainbowKitAuthenticationProvider,
 } from "@rainbow-me/rainbowkit";
@@ -32,7 +33,12 @@ export default function RainbowKitProvider({
           adapter={authenticationAdapter}
           status={status}
         >
-          <NextRainbowKitProvider>
+          <NextRainbowKitProvider
+               theme={lightTheme({
+              accentColor: '#6950F0', // Butonun ana rengi (Monad moru gibi)
+              accentColorForeground: '#FBFAF9', // Buton üzerindeki yazı rengi
+           
+            })}>
             <div className="h-full min-h-dvh overflow-x-clip font-body text-foreground">
               {children}
             </div>
