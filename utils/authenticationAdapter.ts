@@ -22,7 +22,7 @@ export const authenticationAdapter = createAuthenticationAdapter({
     return createSiweMessage({
       domain: window.location.host,
       address,
-      statement: "Sign in with Ethereum to the app.",
+      statement: "Welcome to the Monplace app",
       uri: window.location.origin,
       version: "1",
       chainId,

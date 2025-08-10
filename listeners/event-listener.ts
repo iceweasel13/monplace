@@ -1,95 +1,76 @@
 // listeners/event-listener.ts
-
 import "dotenv/config";
-import { createPublicClient, http } from "viem";
-// viem/chains içinde monad tanımı olmayabilir, bu yüzden custom chain olarak eklemek daha güvenli.
-// hardhat.config.ts dosyanızdaki chainId'yi kullanın.
-import { defineChain } from "viem";
+import { createPublicClient, http, webSocket } from "viem";
+import { monadTestnet } from "viem/chains";
 import { contractAddress, contractAbi } from "../lib/contract";
 import { adminDb } from "../lib/firebase-admin";
 
-// Monad Testnet'i custom chain olarak tanımlayalım
-const monadTestnet = defineChain({
-  id: 8008135, // hardhat.config.ts dosyanızdaki chainId
-  name: 'Monad Testnet',
-  nativeCurrency: {
-    decimals: 18,
-    name: 'MONAD',
-    symbol: 'MONAD',
-  },
-  rpcUrls: {
-    default: {
-      http: [process.env.MONAD_RPC_URL!],
-    },
-  },
-});
-
-
-if (!process.env.FIREBASE_PROJECT_ID || !process.env.MONAD_RPC_URL || !process.env.NEXT_PUBLIC_CONTRACT_ADDRESS) {
-  console.error("HATA: Gerekli ortam değişkenleri eksik. .env.local dosyasını kontrol edin.");
+// Gerekli ortam değişkenlerinin varlığını kontrol et
+if (
+  !process.env.FIREBASE_PROJECT_ID ||
+  !process.env.MONAD_RPC_URL || // HTTP RPC her zaman zorunlu
+  !process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
+) {
+  console.error(
+    "HATA: Gerekli ortam değişkenleri eksik. .env.local dosyasını kontrol edin."
+  );
   process.exit(1);
 }
 
-console.log("Listener başlatılıyor...");
+// Ortam değişkenine göre WSS veya HTTP transport'u seç
+const useWss = !!process.env.MONAD_WSS_RPC_URL;
+const transport = useWss
+  ? webSocket(process.env.MONAD_WSS_RPC_URL)
+  : http(process.env.MONAD_RPC_URL);
+
+console.log(
+  `Listener başlatılıyor (${useWss ? "WebSocket" : "HTTP Polling"} modu)...`
+);
 
 const client = createPublicClient({
   chain: monadTestnet,
-  transport: http(process.env.MONAD_RPC_URL),
+  transport: transport,
 });
 
 async function main() {
-  console.log(`Kontrat dinleniyor: ${contractAddress}`);
+  console.log(`Akıllı kontrat dinleniyor: ${contractAddress}`);
 
-  // --- SAĞLIK KONTROLÜ BAŞLANGIÇ ---
-  // Her 10 saniyede bir en son blok numarasını kontrol et
-  setInterval(async () => {
-    try {
-      const blockNumber = await client.getBlockNumber();
-      // BigInt'i string'e çevirirken 'n' karakterini kaldırıyoruz
-      console.log(`[Sağlık Kontrolü] Bağlantı başarılı. En son blok: ${blockNumber.toString()}`);
-    } catch (error) {
-      console.error("[Sağlık Kontrolü] RPC bağlantı hatası:", error);
-    }
-  }, 10000); // 10 saniyede bir
-  // --- SAĞLIK KONTROLÜ BİTİŞ ---
-
-
+  // Olay dinleyici
   client.watchContractEvent({
     address: contractAddress,
     abi: contractAbi,
     eventName: "PixelPainted",
+    // WSS kullanmıyorsak, polling aralığını belirle
+    pollingInterval: useWss ? undefined : 2000,
     onLogs: (logs) => {
-      // Olay yakalandığında çok belirgin bir log basalım
-      console.log("----------- PIXEL OLAYI YAKALANDI! -----------");
-      console.log(logs);
-      console.log("---------------------------------------------");
-
       for (const log of logs) {
         const { x, y, colorIndex, paintedBy } = log.args;
 
         if (x === undefined || y === undefined || colorIndex === undefined) {
-          console.error("Olay verisi eksik:", log.args);
+          console.error("[HATA] Gelen olay verisi eksik:", log.args);
           continue;
         }
 
         const pixelId = `${x}-${y}`;
         const pixelRef = adminDb.collection("pixels").doc(pixelId);
-
-        pixelRef.set({ x, y, colorIndex, updated_by: paintedBy }).then(() => {
-          console.log(`Firestore güncellendi: Piksel ${pixelId}`);
-        }).catch(error => {
-          console.error(`Firestore güncelleme hatası, piksel ${pixelId}:`, error);
-        });
+        
+        pixelRef
+          .set({ x, y, colorIndex, updated_by: paintedBy })
+          .then(() => {
+            console.log(`Firestore güncellendi: Piksel (${pixelId}) | Boyayan: ${paintedBy}`);
+          })
+          .catch((error) => {
+            console.error(`[HATA] Firestore güncelleme hatası, piksel ${pixelId}:`, error);
+          });
       }
     },
-    // Polling interval'ı manuel olarak ayarlayarak daha sık kontrol sağlayabiliriz
-    pollingInterval: 2000, // Her 2 saniyede bir yeni olayları kontrol et
+    onError: (error) => console.error("[HATA] Olay dinleyicide sorun oluştu:", error.message),
   });
 
-  console.log("... Olaylar bekleniyor ...");
+  console.log("... Canlı olaylar bekleniyor ...");
 }
 
 main().catch((error) => {
-  console.error("Listener başlatılamadı:", error);
+  console.error("[KRİTİK HATA] Listener başlatılamadı:", error);
   process.exit(1);
 });

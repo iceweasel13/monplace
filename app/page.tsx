@@ -30,7 +30,7 @@ export default function Page() {
   const [selectedColor, setSelectedColor] = useState<string>("#000000");
 
   return (
-    <div className="flex flex-col h-screen bg-gray-200 dark:bg-gray-800">
+    <div className="flex flex-col h-screen bg-dark-monad">
       <Navbar
         selectedColor={selectedColor}
         setSelectedColor={setSelectedColor}

@@ -16,9 +16,9 @@ export default function Navbar({
   setSelectedColor,
 }: NavbarProps) {
   return (
-    <header className="w-full p-4 bg-gray-100 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700">
+    <header className="w-full p-4 bg-dark-monad  border-monad border-b-4">
       <div className="container mx-auto flex flex-wrap items-center justify-between">
-        <div className="text-2xl font-bold">MonPlace</div>
+        <div className="text-xl font-bold text-monad-white">MonPlace</div>
         <div className="w-full md:w-auto order-last md:order-none mt-4 md:mt-0">
           <ColorPalette
             selectedColor={selectedColor}

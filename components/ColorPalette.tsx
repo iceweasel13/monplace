@@ -1,9 +1,7 @@
-// components/ColorPalette.tsx
 "use client";
 
 import React from "react";
-import { clsx } from "clsx"; // Class isimlerini koşullu birleştirmek için küçük bir yardımcı
-
+import { clsx } from "clsx"; 
 // Bileşenin alacağı proplar için type tanımı
 type ColorPaletteProps = {
   selectedColor: string;
@@ -12,8 +10,14 @@ type ColorPaletteProps = {
 
 // Palet renklerimiz
 const paletteColors = [
-  "#FF0000", "#00FF00", "#0000FF", "#FFFF00",
-  "#FF00FF", "#00FFFF", "#000000", "#FFFFFF",
+    "#3E3472", // Dark Monad
+  "#6950F0", // Monad Purple
+  "#A3D8F4", // Pastel Blue
+  "#F6A5C0", // Pastel Pink
+  "#F9D57E", // Pastel Yellow
+  "#AED9B6", // Pastel Green
+  "#FBFAF9", // Monad White
+  "#1A1530", // Monad Black
 ];
 
 export default function ColorPalette({
