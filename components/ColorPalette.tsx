@@ -17,7 +17,7 @@ const paletteColors = [
   "#FF3F33", // Pastel Red
   "#F9D57E", // Pastel Yellow
   "#AED9B6", // Pastel Green
-  "#FBFAF9", // Monad White
+  // "#FBFAF9", // Monad White
   "#1A1530", // Monad Black
 ];
 
