@@ -1,9 +1,9 @@
 import CredentialsProvider from "next-auth/providers/credentials";
 import type { NextAuthOptions } from "next-auth";
 import { SiweMessage } from "siwe";
-import { readCookieFromStorageServerAction } from "@/utils/action/serverActions";
+import { cookies } from "next/headers";
 
-interface User {
+interface AuthUser {
   id: string;
   accessToken: string;
   walletAddress: string;
@@ -18,8 +18,7 @@ export const authConfig: NextAuthOptions = {
       },
       authorize: async (
         credentials: Record<"message" | "signature", string> | undefined
-      ): Promise<User | null> => {
-        // Handle case where credentials might be undefined
+      ): Promise<AuthUser | null> => {
         if (!credentials) {
           console.error("No credentials provided.");
           return null;
@@ -27,14 +26,17 @@ export const authConfig: NextAuthOptions = {
 
         try {
           const siweMessage = new SiweMessage(credentials.message);
-          const nonce = await readCookieFromStorageServerAction();
+          
+          // 1. Nonce'ı iron-session yerine doğrudan cookie'den oku
+          const cookieStore = await cookies();
+          const nonce = cookieStore.get("siwe-nonce")?.value;
 
-          // Check if the nonce matches
+          // 2. Nonce'ın eşleşip eşleşmediğini kontrol et
           if (nonce !== siweMessage.nonce) {
             throw new Error("Invalid nonce: Nonce mismatch detected.");
           }
 
-          // Verify the signature
+          // 3. İmzayı doğrula
           const verificationResult = await siweMessage.verify({
             signature: credentials.signature,
             domain: siweMessage.domain,
@@ -42,23 +44,23 @@ export const authConfig: NextAuthOptions = {
           });
 
           if (verificationResult) {
-            const user: User = {
+            // 4. Başarılı doğrulamadan sonra nonce cookie'sini sil (tek kullanımlık olması için)
+            cookieStore.delete("siwe-nonce");
+
+            const user: AuthUser = {
               id: verificationResult.data.address,
               accessToken: "Ox1010", // Example token, replace with actual logic
               walletAddress: verificationResult.data.address,
             };
-            return user; // Return the user object
+            return user;
           }
 
-          // Return null if verification fails
           return null;
         } catch (error) {
           if (error instanceof Error) {
-            // Handle Error object
             console.error("Login error:", error.message);
             throw new Error(error.message);
           } else {
-            // Handle other types of errors (e.g., string)
             console.error("Login error:", error);
             throw new Error("An unknown error occurred.");
           }
@@ -68,16 +70,18 @@ export const authConfig: NextAuthOptions = {
   ],
   secret: process.env.SECRET,
   callbacks: {
-    async jwt({ token, user, session }) {
+    async jwt({ token, user }) {
       if (user) {
-        token.accessToken = user.accessToken;
-        token.walletAddress = user.walletAddress;
+        token.accessToken = user.accessToken as string;
+        token.walletAddress = user.walletAddress as string;
       }
       return token;
     },
     async session({ session, token }) {
-      session.accessToken = token.accessToken;
-      session.user.walletAddress = token.walletAddress;
+      session.accessToken = token.accessToken as string;
+      if (session.user) {
+          session.user.walletAddress = token.walletAddress as string;
+      }
       return session;
     },
   },
@@ -88,40 +92,21 @@ export const authConfig: NextAuthOptions = {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: true,
+        secure: process.env.NODE_ENV === "production",
       },
     },
   },
-  events: {
-    async signIn(message) {
-      /* on successful sign in */
-    },
-    async signOut(message) {
-      /* on signout */
-    },
-    async createUser(message) {
-      /* user created */
-    },
-    async updateUser(message) {
-      /* user updated - e.g. their email was verified */
-    },
-    async linkAccount(message) {
-      /* account (e.g. Twitter) linked to a user */
-    },
-    async session(message) {
-      /* session is active */
-    },
-  },
+  // events bloğu genellikle production'da loglama için kullanılır, isteğe bağlıdır.
+  events: {}, 
 };
 
+// TypeScript tip tanımlamaları (Bunlar doğru ve gerekli)
 declare module "next-auth" {
   interface User {
     accessToken: string;
     walletAddress: string;
   }
-}
 
-declare module "next-auth" {
   interface Session {
     accessToken: string;
     user: {

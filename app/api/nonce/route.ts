@@ -1,12 +1,19 @@
-import { submitCookieToStorageServerAction } from "@/utils/action/serverActions";
+// app/api/nonce/route.ts
 import { NextResponse } from "next/server";
 import { generateNonce } from "siwe";
+import { cookies } from "next/headers";
 
 export async function POST() {
   try {
     const nonce = generateNonce();
-    await submitCookieToStorageServerAction(nonce);
-    return NextResponse.json({ nonce: nonce }, { status: 201 }); // 201 Created
+    // Güvenli ve httpOnly bir cookie oluşturuyoruz
+    (await cookies()).set("siwe-nonce", nonce, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+    return NextResponse.json({ nonce: nonce });
   } catch (error: unknown) {
     return NextResponse.json(
       { message: (error as Error).message },
